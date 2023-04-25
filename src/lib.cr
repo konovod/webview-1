@@ -33,6 +33,8 @@ module Webview
     # Posts a function to be executed on the main thread. You normally do not need
     # to call this function, unless you want to tweak the native window.
     fun dispatch = webview_dispatch(w : T, fn : (T, Void* -> Void), arg : Void*)
+    # sets a function that will be periodically called in a main thread
+    fun idle = webview_idle(w : T, fn : (Void -> Void))
     # Returns a native window handle pointer. When using GTK backend the pointer
     # is GtkWindow pointer, when using Cocoa backend the pointer is NSWindow
     # pointer, when using Win32 backend the pointer is HWND pointer.

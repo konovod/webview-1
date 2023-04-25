@@ -121,6 +121,10 @@ WEBVIEW_API void webview_terminate(webview_t w);
 WEBVIEW_API void
 webview_dispatch(webview_t w, void (*fn)(webview_t w, void *arg), void *arg);
 
+// Sets a function that will be periodically called in a main thread
+WEBVIEW_API void
+webview_idle(webview_t w, void (*fn)(void));
+
 // Returns a native window handle pointer. When using GTK backend the pointer
 // is GtkWindow pointer, when using Cocoa backend the pointer is NSWindow
 // pointer, when using Win32 backend the pointer is HWND pointer.
@@ -572,6 +576,15 @@ public:
                     [](void *f) { delete static_cast<dispatch_fn_t *>(f); });
   }
 
+  void idle(std::function<void()> f) {
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)([](void *f) -> int {
+                      (*static_cast<dispatch_fn_t *>(f))();
+                      return G_SOURCE_CONTINUE;
+                    }),
+                    new std::function<void()>(f),
+                    [](void *f) { delete static_cast<dispatch_fn_t *>(f); });
+  }
+
   void set_title(const std::string &title) {
     gtk_window_set_title(GTK_WINDOW(m_window), title.c_str());
   }
@@ -754,6 +767,9 @@ public:
                        (*f)();
                        delete f;
                      }));
+  }
+  void idle(std::function<void()> f) {
+    // TODO
   }
   void set_title(const std::string &title) {
     objc::msg_send<void>(m_window, "setTitle:"_sel,
@@ -1929,11 +1945,24 @@ public:
   win32_edge_engine(win32_edge_engine &&other) = delete;
   win32_edge_engine &operator=(win32_edge_engine &&other) = delete;
 
+  void idle(void (*fn)(void)) {
+	  m_idle = fn;
+  }
+
   void run() {
     MSG msg;
-    BOOL res;
-    while ((res = GetMessage(&msg, nullptr, 0, 0)) != -1) {
-      if (msg.hwnd) {
+    while (1)
+    {
+      if(PeekMessage (&msg, nullptr, 0, 0, PM_REMOVE) == 0 )
+      {
+        if(m_idle)
+          m_idle();
+        else
+          Sleep(1);
+        continue;
+      }
+      if(msg.hwnd)
+      {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
         continue;
@@ -2091,6 +2120,7 @@ private:
   // Source: https://docs.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/webview2-idl#createcorewebview2environmentwithoptions
   com_init_wrapper m_com_init{COINIT_APARTMENTTHREADED};
   HWND m_window = nullptr;
+  void (*m_idle )(void) = nullptr;
   POINT m_minsz = POINT{0, 0};
   POINT m_maxsz = POINT{0, 0};
   DWORD m_main_thread = GetCurrentThreadId();
@@ -2234,6 +2264,10 @@ WEBVIEW_API void webview_terminate(webview_t w) {
 WEBVIEW_API void webview_dispatch(webview_t w, void (*fn)(webview_t, void *),
                                   void *arg) {
   static_cast<webview::webview *>(w)->dispatch([=]() { fn(w, arg); });
+}
+
+WEBVIEW_API void webview_idle(webview_t w, void (*fn)(void)) {
+  static_cast<webview::webview *>(w)->idle(fn);
 }
 
 WEBVIEW_API void *webview_get_window(webview_t w) {

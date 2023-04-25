@@ -30,6 +30,10 @@ module Webview
     @@dispatchs = Hash(Proc(Nil), Pointer(Void)?).new
     @@bindings = Hash(JSProc, Pointer(Void)?).new
 
+    @@idle = Proc(Void, Void).new do
+      sleep(0.01)
+    end
+
     def initialize(debug, title)
       @w = LibWebView.create(debug ? 1 : 0, nil)
       LibWebView.set_title(@w, title)
@@ -49,6 +53,7 @@ module Webview
     # runs the main loop until it's terminated. After this function exists
     # you must destroy the WebView
     def run
+      LibWebView.idle @w, @@idle
       LibWebView.run(@w)
     end
 
